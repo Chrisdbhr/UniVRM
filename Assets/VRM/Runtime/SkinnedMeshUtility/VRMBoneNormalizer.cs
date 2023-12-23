@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using UniGLTF;
 using UniGLTF.MeshUtility;
 using UniGLTF.Utils;
 using UniHumanoid;
@@ -65,50 +66,19 @@ namespace VRM
                 }
             }
 
-            //
-            // 正規化されたヒエラルキーを作る
-            //
-            var (normalized, bMap) = BoneNormalizer.Execute(go, (_src, dst, boneMap) =>
-            {
-                var src = _src.GetComponent<Animator>();
+            // Meshの焼きこみ
+            var newMesh = BoneNormalizer.NormalizeHierarchyFreezeMesh(go, true);
+            // 焼いたMeshで置き換える
+            BoneNormalizer.Replace(go, newMesh, true, true);
 
-                var srcHumanBones = CachedEnum.GetValues<HumanBodyBones>()
-                    .Where(x => x != HumanBodyBones.LastBone)
-                    .Select(x => new { Key = x, Value = src.GetBoneTransform(x) })
-                    .Where(x => x.Value != null)
-                    ;
+            // 新しいヒエラルキーからAvatarを作る
+            var newAnimator = go.GetComponent<Animator>();
+            var newAvatar = UniHumanoid.AvatarDescription.RecreateAvatar(newAnimator);
+            newAnimator.avatar = newAvatar;
 
-                var map =
-                       srcHumanBones
-                       .Where(x => boneMap.ContainsKey(x.Value))
-                       .ToDictionary(x => x.Key, x => boneMap[x.Value])
-                       ;
+            // CopyVRMComponents(go, normalized, bMap);
 
-                if (dst.GetComponent<Animator>() == null)
-                {
-                    var animator = dst.AddComponent<Animator>();
-                }
-                var vrmHuman = go.GetComponent<VRMHumanoidDescription>();
-                var avatarDescription = AvatarDescription.Create();
-                if (vrmHuman != null && vrmHuman.Description != null)
-                {
-                    avatarDescription.armStretch = vrmHuman.Description.armStretch;
-                    avatarDescription.legStretch = vrmHuman.Description.legStretch;
-                    avatarDescription.upperArmTwist = vrmHuman.Description.upperArmTwist;
-                    avatarDescription.lowerArmTwist = vrmHuman.Description.lowerArmTwist;
-                    avatarDescription.upperLegTwist = vrmHuman.Description.upperLegTwist;
-                    avatarDescription.lowerLegTwist = vrmHuman.Description.lowerLegTwist;
-                    avatarDescription.feetSpacing = vrmHuman.Description.feetSpacing;
-                    avatarDescription.hasTranslationDoF = vrmHuman.Description.hasTranslationDoF;
-                }
-                avatarDescription.SetHumanBones(map);
-                var avatar = avatarDescription.CreateAvatar(dst.transform);
-                return avatar;
-            });
-
-            CopyVRMComponents(go, normalized, bMap);
-
-            return normalized;
+            return go;
         }
 
         /// <summary>
